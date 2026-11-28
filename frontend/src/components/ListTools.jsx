@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { notify } from '../lib/notifications';
 import './ListTools.css';
 
 const flattenValues = (value) => {
@@ -17,7 +18,11 @@ const flattenObject = (value, prefix = '', result = {}) => {
   return result;
 };
 
-const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+const csvCell = (value) => {
+  let text = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+};
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
@@ -39,21 +44,22 @@ const exportCsv = (rows, filename) => {
 const printRows = (rows, title) => {
   const flattened = rows.map((row) => flattenObject(row));
   const headers = [...new Set(flattened.flatMap(Object.keys))];
-  const popup = window.open('', '_blank', 'noopener,noreferrer');
-  if (!popup) return;
+  const popup = window.open('', '_blank');
+  if (!popup) { notify('Autorisez les fenêtres pop-up pour imprimer.', 'error'); return; }
+  popup.opener = null;
   const heading = escapeHtml(title || 'Rapport');
   const tableHead = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('');
   const tableBody = flattened.map((row) => `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join('')}</tr>`).join('');
-  popup.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${heading}</title><style>body{font:14px Arial,sans-serif;padding:24px;color:#172033}h1{font-size:20px;margin:0 0 16px}p{color:#64748b}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #dbe2ea;padding:7px;text-align:left;overflow-wrap:anywhere}th{background:#f1f5f9}@media print{body{padding:0}}</style></head><body><h1>${heading}</h1><p>${rows.length} élément(s) · ${new Date().toLocaleString('fr-FR')}</p><table><thead><tr>${tableHead}</tr></thead><tbody>${tableBody}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
+  popup.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${heading}</title><style>body{font:14px Arial,sans-serif;padding:24px;color:#172033}h1{font-size:20px;margin:0 0 16px}p{color:#64748b}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #dbe2ea;padding:7px;text-align:left;overflow-wrap:anywhere}th{background:#f1f5f9}@media print{body{padding:0}}</style></head><body><h1>${heading}</h1><p>${rows.length} élément(s) · ${new Date().toLocaleString('fr-FR')}</p><table><thead><tr>${tableHead}</tr></thead><tbody>${tableBody}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`);
   popup.document.close();
 };
 
 export const useListTools = (rows = [], { filterKey = 'statut', filterLabel = 'Statut', filename = 'export.csv' } = {}) => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('');
-  const [page, setPage] = useState(1);
+  const [requestedPage, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const safeRows = Array.isArray(rows) ? rows : [];
+  const safeRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows]);
   const options = useMemo(() => [...new Set(safeRows.map((row) => row?.[filterKey]).filter(Boolean))].sort(), [safeRows, filterKey]);
   const filteredRows = useMemo(() => safeRows.filter((row) => {
     const matchesQuery = !query.trim() || flattenValues(row).join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
@@ -61,21 +67,19 @@ export const useListTools = (rows = [], { filterKey = 'statut', filterLabel = 'S
     return matchesQuery && matchesFilter;
   }), [safeRows, query, filter, filterKey]);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const visibleRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
-
-  useEffect(() => { setPage(1); }, [query, filter, pageSize]);
-  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+  const page = Math.min(requestedPage, pageCount);
+  const visibleRows = useMemo(() => filteredRows.slice((page - 1) * pageSize, page * pageSize), [filteredRows, page, pageSize]);
 
   const toolbar = (
     <div className="list-tools" aria-label="Outils de liste">
       <label className="list-tools-search">
         <span>Rechercher</span>
-        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Saisir un mot-clé…" />
+        <input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Saisir un mot-clé…" />
       </label>
       {options.length > 0 && (
         <label className="list-tools-filter">
           <span>{filterLabel}</span>
-          <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1); }}>
             <option value="">Toutes les valeurs</option>
             {options.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
@@ -83,7 +87,7 @@ export const useListTools = (rows = [], { filterKey = 'statut', filterLabel = 'S
       )}
       <label className="list-tools-size">
         <span>Par page</span>
-        <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+        <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
           {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
         </select>
       </label>
@@ -93,8 +97,8 @@ export const useListTools = (rows = [], { filterKey = 'statut', filterLabel = 'S
       </div>
       <div className="list-tools-pagination">
         <span>{filteredRows.length} résultat(s) · page {page} / {pageCount}</span>
-        <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} aria-label="Page précédente">‹</button>
-        <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount} aria-label="Page suivante">›</button>
+        <button type="button" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} aria-label="Page précédente">‹</button>
+        <button type="button" onClick={() => setPage(Math.min(pageCount, page + 1))} disabled={page >= pageCount} aria-label="Page suivante">›</button>
       </div>
     </div>
   );

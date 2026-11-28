@@ -1,39 +1,56 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
-import Dashboard from './pages/Dashboard'
-import AppelsOffres from './pages/AppelsOffres'
-import AppelsDispo from './pages/AppelsDispo'
-import MesOffres from './pages/MesOffres'
-import Evaluations from './pages/Evaluations'
-import Marches from './pages/Marches'
-import Utilisateurs from './pages/Utilisateurs'
+import { ROLES } from './lib/roles'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const AppelsOffres = lazy(() => import('./pages/AppelsOffres'))
+const AppelsDispo = lazy(() => import('./pages/AppelsDispo'))
+const MesOffres = lazy(() => import('./pages/MesOffres'))
+const Evaluations = lazy(() => import('./pages/Evaluations'))
+const Marches = lazy(() => import('./pages/Marches'))
+const Utilisateurs = lazy(() => import('./pages/Utilisateurs'))
+
+const { ADMIN, GESTIONNAIRE, COMMISSION, SOUMISSIONNAIRE } = ROLES
 
 const Protected = ({ roles, children }) => {
   const { user } = useAuth()
-  if (!user) return <Navigate to="/" replace />
+  const location = useLocation()
+  if (!user) return <Navigate to="/" replace state={{ from: location.pathname }} />
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />
   return children
 }
 
-export default function App() {
+const PublicOnly = ({ children }) => {
   const { user } = useAuth()
+  return user ? <Navigate to="/dashboard" replace /> : children
+}
+
+const guard = (roles, element) => <Protected roles={roles}>{element}</Protected>
+
+export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      <Route path="/inscription" element={<RegisterPage />} />
-      <Route element={<Protected><Layout /></Protected>}>
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="appels-offres" element={<Protected roles={['GESTIONNAIRE', 'ADMINISTRATEUR']}><AppelsOffres /></Protected>} />
-        <Route path="marches" element={<Protected roles={['GESTIONNAIRE', 'ADMINISTRATEUR']}><Marches /></Protected>} />
-        <Route path="appels-offres-dispo" element={<Protected roles={['SOUMISSIONNAIRE']}><AppelsDispo /></Protected>} />
-        <Route path="mes-offres" element={<Protected roles={['SOUMISSIONNAIRE']}><MesOffres /></Protected>} />
-        <Route path="evaluations" element={<Protected roles={['COMMISSION']}><Evaluations /></Protected>} />
-        <Route path="utilisateurs" element={<Protected roles={['ADMINISTRATEUR']}><Utilisateurs /></Protected>} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ErrorBoundary>
+      <Suspense fallback={<div className="page-fallback" role="status">Chargement…</div>}>
+        <Routes>
+          <Route path="/" element={<PublicOnly><LoginPage /></PublicOnly>} />
+          <Route path="/inscription" element={<PublicOnly><RegisterPage /></PublicOnly>} />
+          <Route element={<Protected><Layout /></Protected>}>
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="appels-offres" element={guard([GESTIONNAIRE, ADMIN], <AppelsOffres />)} />
+            <Route path="marches" element={guard([GESTIONNAIRE, ADMIN], <Marches />)} />
+            <Route path="appels-offres-dispo" element={guard([SOUMISSIONNAIRE], <AppelsDispo />)} />
+            <Route path="mes-offres" element={guard([SOUMISSIONNAIRE], <MesOffres />)} />
+            <Route path="evaluations" element={guard([COMMISSION], <Evaluations />)} />
+            <Route path="utilisateurs" element={guard([ADMIN], <Utilisateurs />)} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   )
 }

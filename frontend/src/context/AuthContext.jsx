@@ -1,34 +1,46 @@
-import { createContext, useState, useContext } from 'react';
-import api from '../lib/api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import api, { UNAUTHORIZED_EVENT } from '../lib/api';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
+
+const clearSession = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
   });
 
-  const save = ({ token, user }) => {
+  const save = useCallback(({ token, user: u }) => {
     localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    setUser(user);
-  };
+    localStorage.setItem('user', JSON.stringify(u));
+    setUser(u);
+  }, []);
 
-  const login = async (email, password) => save((await api.post('/login', { email, password })).data);
-  const register = async (payload) => save((await api.post('/register', payload)).data);
+  const login = useCallback(async (email, password) => save((await api.post('/login', { email, password })).data), [save]);
+  const register = useCallback(async (payload) => save((await api.post('/register', payload)).data), [save]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try { await api.post('/logout'); } catch { /* token déjà invalide */ }
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearSession();
     setUser(null);
-  };
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  // Token expiré ou révoqué côté serveur : on vide la session, le routeur renvoie vers la connexion.
+  useEffect(() => {
+    const onUnauthorized = () => { clearSession(); setUser(null); };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
+
+  const value = useMemo(() => ({ user, login, register, logout }), [user, login, register, logout]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth doit être utilisé dans <AuthProvider>');
+  return ctx;
+};

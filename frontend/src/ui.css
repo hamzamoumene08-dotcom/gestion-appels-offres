@@ -18,3 +18,7 @@
 .eval-box form{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .eval-box input[type=number],.eval-box input[type=text]{padding:6px;border:1px solid #d1d5db;border-radius:5px}
 .login-link{display:block;text-align:center;margin-top:12px;font-size:14px}
+.taux-input{width:72px;padding:5px;border:1px solid #d1d5db;border-radius:5px}
+.btn-sm:disabled,.btn-submit:disabled,.btn-add:disabled,.btn-login:disabled{opacity:.6;cursor:not-allowed}
+.btn-sm:focus-visible,.btn-add:focus-visible,.btn-submit:focus-visible,.btn-login:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+.appel-form textarea{grid-column:span 2;font-family:inherit}
