@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { errMsg } from '../lib/api';
 import './LoginPage.css';
 
-const empty = { name: '', email: '', password: '', raison_sociale: '', ice: '', rc: '', adresse: '', telephone: '' };
+const empty = { name: '', email: '', password: '', adresse: '', telephone: '' };
 
 const RegisterPage = () => {
   const [f, setF] = useState(empty);
@@ -40,9 +40,6 @@ const RegisterPage = () => {
           {field('name', 'Nom du représentant', 'text', true)}
           {field('email', 'Email', 'email', true)}
           {field('password', 'Mot de passe (6 caractères min.)', 'password', true)}
-          {field('raison_sociale', 'Raison sociale', 'text', true)}
-          {field('ice', 'ICE')}
-          {field('rc', 'RC')}
           {field('adresse', 'Adresse')}
           {field('telephone', 'Téléphone')}
           <button type="submit" className="btn-login">S'inscrire</button>

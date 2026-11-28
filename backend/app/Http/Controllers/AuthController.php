@@ -16,9 +16,6 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6',
-            'raison_sociale' => 'required|string|max:255',
-            'ice' => 'nullable|string|max:50',
-            'rc' => 'nullable|string|max:50',
             'adresse' => 'nullable|string|max:255',
             'telephone' => 'nullable|string|max:30',
         ]);
@@ -29,8 +26,7 @@ class AuthController extends Controller
                 'password' => $d['password'], 'role' => 'SOUMISSIONNAIRE',
             ]);
             $user->soumissionnaire()->create([
-                'raison_sociale' => $d['raison_sociale'], 'ice' => $d['ice'] ?? null,
-                'rc' => $d['rc'] ?? null, 'adresse' => $d['adresse'] ?? null,
+                'adresse' => $d['adresse'] ?? null,
                 'telephone' => $d['telephone'] ?? null,
             ]);
             return $user;
